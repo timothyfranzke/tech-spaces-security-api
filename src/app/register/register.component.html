@@ -1,0 +1,23 @@
+<md-card>
+  <md-card-title>
+    Login
+  </md-card-title>
+  <md-card-content>
+    <md-input-container>
+      <input mdInput placeholder="Email" type="email" [(ngModel)]="username">
+    </md-input-container>
+    <md-input-container>
+      <input mdInput placeholder="Password" type="password" (change)="passwordCompare(password, confirmPassword)" [(ngModel)]="password">
+    </md-input-container>
+    <md-input-container>
+      <input mdInput placeholder="Confirm Password" type="password" (change)="passwordCompare(password, confirmPassword)" [(ngModel)]="confirmPassword">
+
+    </md-input-container>
+    <h2 (show)="doPasswordsMatch">bad</h2>
+  </md-card-content>
+  <md-card-actions>
+    <button md-raised-button (click)="register(username, password)">Submit</button>
+  </md-card-actions>
+</md-card>
+
+
