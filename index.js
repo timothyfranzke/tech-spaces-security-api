@@ -1,7 +1,7 @@
 // =================================================================
 // get the packages we need ========================================
 // =================================================================
-var express 	= require('express');
+var express  = require('express');
 var app         = express();
 var bodyParser  = require('body-parser');
 var compose     = require('composable-middleware');
@@ -176,20 +176,20 @@ app.post("/login", function(req, res) {
 app.post("/token/:id", function(req, res){
 
   SpacesToken.findById(req.params.id, function(err, tokenResult){
-      console.log(tokenResult);
-      if(!!err) res.sendStatus(500);
-      if(!tokenResult.isActive) res.status(403).send("Token invalid");
-      if(tokenResult.isSingleAccessExpired == true) res.status(403).send("Token invalid");
-      else {
-        SpacesToken.findByIdAndUpdate(req.params.id, {"isSingleAccessExpired": true}, function(err, tokenUpdateResult){
-          let response = {
-            accessToken : tokenResult.token,
-            refreshToken : tokenResult.refreshToken
-          };
+    console.log(tokenResult);
+    if(!!err) res.sendStatus(500);
+    if(!tokenResult.isActive) res.status(403).send("Token invalid");
+    if(tokenResult.isSingleAccessExpired == true) res.status(403).send("Token invalid");
+    else {
+      SpacesToken.findByIdAndUpdate(req.params.id, {"isSingleAccessExpired": true}, function(err, tokenUpdateResult){
+        let response = {
+          accessToken : tokenResult.token,
+          refreshToken : tokenResult.refreshToken
+        };
 
-          res.json(response);
-        })
-      }
+        res.json(response);
+      })
+    }
   })
 });
 
@@ -304,7 +304,7 @@ app.post('/register-email', function(req, res){
   user.password = password;
   user.applications = [];
 
-  Application.findById(req.body.application_id, function(err, applicationResult) {
+  Application.findById(req.params.ApplicationID, function(err, applicationResult) {
     if (applicationResult == null) {
       res.status(403);
     }
@@ -413,4 +413,3 @@ function sendEmail(message, callback) {
     callback(null, info);
   })
 }
-
