@@ -12,6 +12,7 @@ var passport    = require("passport");
 var passportJWT = require("passport-jwt");
 var expressJwt  = require('express-jwt');
 var guard       = require('express-jwt-permissions')();
+var base64      = require('base-64');
 
 var bcrypt      = require('bcrypt');
 
@@ -71,15 +72,50 @@ var isAuthenticated = function(){
   return compose()
   // Validate jwt
     .use(function(req, res, next) {
+      let applicationfound = false;
+      if(req.headers.authorization === undefined){
+        return res.sendStatus(403);
+      }
       // allow access_token to be passed through query parameter as well
       if(req.query && req.query.hasOwnProperty('access_token')) {
+        console.log("Token : " + req.query.access_token);
         req.headers.authorization = `Bearer ${req.query.access_token}`;
       }
       // IE11 forgets to set Authorization header sometimes. Pull from cookie instead.
-      if(req.query && typeof req.headers.authorization === 'undefined') {
+      if(req.query && typeof req.headers.authorization === 'undefined' && typeof req.cookies.token !== 'undefined') {
+        //logging.INFO(className, methodName, "Token : " + req.cookies.token);
         req.headers.authorization = `Bearer ${req.cookies.token}`;
       }
-      validateJwt(req, res, next);
+      let claims = JSON.parse(base64.decode(req.headers.authorization.split(' ')[1].split('.')[1]));
+      if(claims === null || claims === undefined){
+        //logging.INFO(className, isAuthenticated.name, req.headers.authorization);
+        //logging.INFO(className, isAuthenticated.name, "claims isn't valid");
+
+        return res.sendStatus(403);
+      }
+      if(claims.application == undefined || claims.application.application){
+        console.log(claims);
+        console.log("claims.application isn't valid");
+        return res.sendStatus(403);
+      }
+
+      let applicationId = claims.application.application_id;
+      console.log("ApplicationID: " + applicationId);
+      config.secrets.forEach(function(secret){
+
+        if(secret.id === applicationId){
+          applicationfound = true;
+          let validateJwt   = expressJwt({
+            secret: secret.secret
+          });
+          //logging.INFO(className, methodName, secret);
+          if(validateJwt === undefined){
+            return res.sendStatus(403);
+          }
+
+          validateJwt(req, res, next);
+        }
+      });
     });
 };
 
@@ -91,23 +127,106 @@ var hasRole = function (roleRequired) {
     .use(isAuthenticated())
     .use(function meetsRequirements(req, res, next) {
       let isAuthenticated = false;
-      req.user.applications.forEach(function(userApplication){
-        if(userApplication.application_id === '59e178a8734d1d1c37fc3c52'){
-          userApplication.roles.forEach(function(userRole){
-            if(!isAuthenticated && roles.indexOf(userRole) >= roles.indexOf(roleRequired))
-            {
-              isAuthenticated = true;
-            }
-          });
-          if(isAuthenticated) {
-            return next();
-          } else {
-            return res.status(403).send('Forbidden');
-          }
+      let userApplication = req.user.application;
+      //logging.INFO(className, methodName, "looping user.applications" + userApplication.application_id);
+      userApplication.roles.forEach(function(userRole){
+        //logging.INFO(className, methodName, "looping userApplication.roles " + userRole);
+
+        if(!isAuthenticated && roles.indexOf(userRole) >= roles.indexOf(roleRequired))
+        {
+          isAuthenticated = true;
+          return next();
         }
       });
+
+      //logging.INFO(className,methodName,"isAuthenticated : " + isAuthenticated);
+      if(!isAuthenticated)
+      {
+        //logging.INFO(className, methodName, "sending status 403");
+        res.sendStatus(403);
+      }
     });
 };
+
+app.get("/application-redirect/:applicationId", function(req,res){
+  let claims = JSON.parse(base64.decode(req.headers.authorization.split(' ')[1].split('.')[1]));
+  if(claims === null || claims === undefined){
+    //logging.INFO(className, isAuthenticated.name, req.headers.authorization);
+    //logging.INFO(className, isAuthenticated.name, "claims isn't valid");
+
+    return res.sendStatus(403);
+  }
+  if(claims.application == undefined || claims.application.application){
+    console.log(claims);
+    console.log("claims.application isn't valid");
+    return res.sendStatus(403);
+  }
+
+  let userid = claims.id;
+  User.findById(
+    userid
+  , function(err, user){
+    if( user == null ){
+      res.status(401).json({message:"email/password incorrect"});
+    }
+    else {
+        var maxRole = {value: -1};
+        let application = {};
+        let userApplicationList = [];
+        let selectedApplication = {};
+        Application.find({"active":true}, function(err, applications){
+          applications.forEach(function(applicationRecord){
+            if(applicationRecord._id == req.params.applicationId){
+              application = applicationRecord;
+            }
+            user.applications.forEach(function(userApplication){
+              if(applicationRecord._id == userApplication.application_id){
+                console.log("match!");
+                let userAppObject = {
+                  name: applicationRecord.application,
+                  application_id: applicationRecord._id,
+                  roles:userApplication.roles
+                };
+                userApplicationList.push(userAppObject);
+              }
+              if(userApplication.application_id == req.params.applicationId){
+                selectedApplication = userApplication;
+              }
+            });
+          });
+
+          application.roles.forEach(function (role) {
+            user.applications[0].roles.forEach(function (userRole) {
+              if (userRole === role.role) {
+                if (maxRole.value === undefined) {
+                  maxRole = role;
+                }
+                else if (maxRole.value < role.value) {
+                  maxRole = role;
+                }
+              }
+            })
+          });
+          var payload = {id: user.id, application_data: user.application_data, application:selectedApplication, accessible_applications:userApplicationList};
+          var token = jwt.sign(payload, application.secret, {
+            expiresIn: 60 * 60 * 5,
+            audience: application.audience,
+            issuer: 'https://www.tech-spaces-security.com'
+          });
+
+          var tokenRecord = new SpacesToken();
+          tokenRecord.expiresIn = 60 * 60 * 24;
+          tokenRecord.token = token;
+          tokenRecord.refreshToken = generateRefreshToken();
+
+          tokenRecord.save(function (err, tokenResult) {
+            console.log(tokenResult);
+            res.json({message: "ok", redirect: maxRole.redirect_url + '/' + tokenResult._id});
+          });
+        });
+    }
+  });
+});
 
 app.post("/login", function(req, res) {
 
@@ -127,10 +246,32 @@ app.post("/login", function(req, res) {
       if(bcrypt.compareSync(req.body.password, user.password)) {
         var maxRole = {value: -1};
         var applicationId = user.applications[0].application_id;
-        console.log("application id");
-        console.log(applicationId);
+        let application = {};
+        let userApplicationList = [];
 
-        Application.findById(applicationId, function(err, application) {
+        Application.find({"active":true}, function(err, applications){
+
+          applications.forEach(function(applicationRecord){
+            if(applicationRecord._id == user.applications[0].application_id){
+              application = applicationRecord;
+            }
+            user.applications.forEach(function(userApplication){
+              if(applicationRecord._id == userApplication.application_id){
+                console.log("match!");
+                let userAppObject = {
+                  name: applicationRecord.application,
+                  application_id: applicationRecord._id,
+                  roles:userApplication.roles
+                };
+                userApplicationList.push(userAppObject);
+              }
+            });
+            console.log("user applications");
+            console.log(userApplicationList);
+          });
+
+          console.log("application");
+          console.log(application);
           application.roles.forEach(function (role) {
             user.applications[0].roles.forEach(function (userRole) {
               if (userRole === role.role) {
@@ -143,7 +284,7 @@ app.post("/login", function(req, res) {
               }
             })
           });
-          var payload = {id: user.id, roles: user.applications[0].roles, application_data: user.application_data, applications:user.applications};
+          var payload = {id: user.id, application_data: user.application_data, application:user.applications[0], accessible_applications:userApplicationList};
           var token = jwt.sign(payload, application.secret, {
             expiresIn: 60 * 60 * 5,
             audience: application.audience,
