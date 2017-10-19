@@ -16,11 +16,11 @@ var base64      = require('base-64');
 
 var bcrypt      = require('bcrypt');
 
-var ExtractJwt = passportJWT.ExtractJwt;
+var ExtractJwt  = passportJWT.ExtractJwt;
 var JwtStrategy = passportJWT.Strategy;
-var jwt    = require('jsonwebtoken'); // used to create, sign, and verify tokens
-var config = require('./server/configuration/configuration'); // get our config file
-var User   = require('./server/models/user'); // get our mongoose model
+var jwt         = require('jsonwebtoken'); // used to create, sign, and verify tokens
+var config      = require('./server/configuration/configuration'); // get our config file
+var User        = require('./server/models/user'); // get our mongoose model
 var Application = require('./server/models/application');
 var SpacesToken = require('./server/models/token');
 var PasswordReset = require('./server/models/passwordReset');
@@ -170,10 +170,12 @@ app.get("/application-redirect/:applicationId", function(req,res){
       res.status(401).json({message:"email/password incorrect"});
     }
     else {
-        var maxRole = {value: -1};
+        let maxRole = {value: -1};
         let application = {};
         let userApplicationList = [];
         let selectedApplication = {};
+        let selectedUserApplication = {};
+
         Application.find({"active":true}, function(err, applications){
           applications.forEach(function(applicationRecord){
             if(applicationRecord._id == req.params.applicationId){
@@ -181,7 +183,7 @@ app.get("/application-redirect/:applicationId", function(req,res){
             }
             user.applications.forEach(function(userApplication){
               if(applicationRecord._id == userApplication.application_id){
-                console.log("match!");
+                selectedUserApplication = userApplication;
                 let userAppObject = {
                   name: applicationRecord.application,
                   application_id: applicationRecord._id,
@@ -207,14 +209,14 @@ app.get("/application-redirect/:applicationId", function(req,res){
               }
             })
           });
-          var payload = {id: user.id, application_data: user.application_data, application:selectedApplication, accessible_applications:userApplicationList};
-          var token = jwt.sign(payload, application.secret, {
+          let payload = {id: user.id, application_data: selectedUserApplication.application_data, application:selectedApplication, accessible_applications:userApplicationList};
+          let token = jwt.sign(payload, application.secret, {
             expiresIn: 60 * 60 * 5,
             audience: application.audience,
             issuer: 'https://www.tech-spaces-security.com'
           });
 
-          var tokenRecord = new SpacesToken();
+          let tokenRecord = new SpacesToken();
           tokenRecord.expiresIn = 60 * 60 * 24;
           tokenRecord.token = token;
           tokenRecord.refreshToken = generateRefreshToken();
@@ -248,6 +250,7 @@ app.post("/login", function(req, res) {
         var applicationId = user.applications[0].application_id;
         let application = {};
         let userApplicationList = [];
+        let selectedUserApplication = {};
 
         Application.find({"active":true}, function(err, applications){
 
@@ -284,7 +287,9 @@ app.post("/login", function(req, res) {
               }
             })
           });
-          var payload = {id: user.id, application_data: user.application_data, application:user.applications[0], accessible_applications:userApplicationList};
+          var payload = {id: user.id, application_data: user.applications[0].application_data, application:user.applications[0], accessible_applications:userApplicationList};
+          console.log("payload");
+          console.log(payload);
           var token = jwt.sign(payload, application.secret, {
             expiresIn: 60 * 60 * 5,
             audience: application.audience,
