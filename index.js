@@ -243,14 +243,10 @@ app.post("/login", function(req, res) {
       res.status(401).json({message:"email/password incorrect"});
     }
     else {
-      console.log("application id");
-      console.log(applicationId);
       if(bcrypt.compareSync(req.body.password, user.password)) {
         var maxRole = {value: -1};
-        var applicationId = user.applications[0].application_id;
         let application = {};
         let userApplicationList = [];
-        let selectedUserApplication = {};
 
         Application.find({"active":true}, function(err, applications){
 
@@ -260,7 +256,6 @@ app.post("/login", function(req, res) {
             }
             user.applications.forEach(function(userApplication){
               if(applicationRecord._id == userApplication.application_id){
-                console.log("match!");
                 let userAppObject = {
                   name: applicationRecord.application,
                   application_id: applicationRecord._id,
@@ -269,12 +264,7 @@ app.post("/login", function(req, res) {
                 userApplicationList.push(userAppObject);
               }
             });
-            console.log("user applications");
-            console.log(userApplicationList);
           });
-
-          console.log("application");
-          console.log(application);
           application.roles.forEach(function (role) {
             user.applications[0].roles.forEach(function (userRole) {
               if (userRole === role.role) {
@@ -287,7 +277,10 @@ app.post("/login", function(req, res) {
               }
             })
           });
-          var payload = {id: user.id, application_data: user.applications[0].application_data, application:user.applications[0], accessible_applications:userApplicationList};
+          var payload = JSON.parse(JSON.stringify(user.applications[0]));
+          payload.id = user.id;
+          payload.accessible_applications = userApplicationList;
+
           console.log("payload");
           console.log(payload);
           var token = jwt.sign(payload, application.secret, {
