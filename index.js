@@ -151,14 +151,6 @@ var hasRole = function (roleRequired) {
 app.get("/application-redirect/:applicationId", function(req,res){
   let claims = JSON.parse(base64.decode(req.headers.authorization.split(' ')[1].split('.')[1]));
   if(claims === null || claims === undefined){
-    //logging.INFO(className, isAuthenticated.name, req.headers.authorization);
-    //logging.INFO(className, isAuthenticated.name, "claims isn't valid");
-
-    return res.sendStatus(403);
-  }
-  if(claims.application == undefined || claims.application.application){
-    console.log(claims);
-    console.log("claims.application isn't valid");
     return res.sendStatus(403);
   }
 
@@ -173,7 +165,7 @@ app.get("/application-redirect/:applicationId", function(req,res){
         let maxRole = {value: -1};
         let application = {};
         let userApplicationList = [];
-        let selectedApplication = {};
+        let selectedApplicationIndex = 0;
         let selectedUserApplication = {};
 
         Application.find({"active":true}, function(err, applications){
@@ -181,9 +173,10 @@ app.get("/application-redirect/:applicationId", function(req,res){
             if(applicationRecord._id == req.params.applicationId){
               application = applicationRecord;
             }
+
+            let i = 0;
             user.applications.forEach(function(userApplication){
               if(applicationRecord._id == userApplication.application_id){
-                selectedUserApplication = userApplication;
                 let userAppObject = {
                   name: applicationRecord.application,
                   application_id: applicationRecord._id,
@@ -192,13 +185,16 @@ app.get("/application-redirect/:applicationId", function(req,res){
                 userApplicationList.push(userAppObject);
               }
               if(userApplication.application_id == req.params.applicationId){
-                selectedApplication = userApplication;
+                selectedApplicationIndex = i;
+              }
+              else{
+                i++;
               }
             });
           });
 
           application.roles.forEach(function (role) {
-            user.applications[0].roles.forEach(function (userRole) {
+            user.applications[selectedApplicationIndex].roles.forEach(function (userRole) {
               if (userRole === role.role) {
                 if (maxRole.value === undefined) {
                   maxRole = role;
@@ -209,7 +205,9 @@ app.get("/application-redirect/:applicationId", function(req,res){
               }
             })
           });
-          let payload = {id: user.id, application_data: selectedUserApplication.application_data, application:selectedApplication, accessible_applications:userApplicationList};
+          let payload = JSON.parse(JSON.stringify(user.applications[selectedApplicationIndex]));
+          payload.id = user.id;
+          payload.accessible_applications = userApplicationList;
           let token = jwt.sign(payload, application.secret, {
             expiresIn: 60 * 60 * 5,
             audience: application.audience,
@@ -277,19 +275,17 @@ app.post("/login", function(req, res) {
               }
             })
           });
-          var payload = JSON.parse(JSON.stringify(user.applications[0]));
+          let payload = JSON.parse(JSON.stringify(user.applications[0]));
           payload.id = user.id;
           payload.accessible_applications = userApplicationList;
 
-          console.log("payload");
-          console.log(payload);
-          var token = jwt.sign(payload, application.secret, {
+          let token = jwt.sign(payload, application.secret, {
             expiresIn: 60 * 60 * 5,
             audience: application.audience,
             issuer: 'https://www.tech-spaces-security.com'
           });
 
-          var tokenRecord = new SpacesToken();
+          let tokenRecord = new SpacesToken();
           tokenRecord.expiresIn = 60 * 60 * 24;
           tokenRecord.token = token;
           tokenRecord.refreshToken = generateRefreshToken();
