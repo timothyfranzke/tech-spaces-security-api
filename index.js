@@ -173,28 +173,40 @@ app.get("/application-redirect/:applicationId", function(req,res){
             if(applicationRecord._id == req.params.applicationId){
               application = applicationRecord;
             }
-
-            let i = 0;
-            user.applications.forEach(function(userApplication){
-              if(applicationRecord._id == userApplication.application_id){
-                let userAppObject = {
-                  name: applicationRecord.application,
-                  application_id: applicationRecord._id,
-                  roles:userApplication.roles
-                };
-                userApplicationList.push(userAppObject);
-              }
-              if(userApplication.application_id == req.params.applicationId){
-                selectedApplicationIndex = i;
-              }
-              else{
-                i++;
-              }
-            });
           });
 
+          let applicationIndex = user.applications.findIndex(i => i.application_id === application._id.toString());
+          console.log(applicationIndex);
+          console.log(user.applications);
+          console.log(application);
+          let requestingApplicationIndex = user.applications.findIndex(i => i.application_id === claims.application_id);
+          /*let i = 0;
+          user.applications.forEach(function(userApplication){
+            if(applicationRecord._id == userApplication.application_id){
+              let userAppObject = {
+                name: applicationRecord.application,
+                application_id: applicationRecord._id
+              };
+              if(applicationRecord.type !== undefined && applicationRecord.type == 'plugin'){
+                userAppObject.roles = claims.roles;
+              }
+              else {
+                userAppObject.roles = userApplication.roles;
+              }
+
+              userApplicationList.push(userAppObject);
+            }
+            if(userApplication.application_id == req.params.applicationId){
+              selectedApplicationIndex = i;
+            }
+            else{
+              i++;
+            }
+          });*/
+
+
           application.roles.forEach(function (role) {
-            user.applications[selectedApplicationIndex].roles.forEach(function (userRole) {
+            user.applications[applicationIndex].roles.forEach(function (userRole) {
               if (userRole === role.role) {
                 if (maxRole.value === undefined) {
                   maxRole = role;
@@ -205,7 +217,14 @@ app.get("/application-redirect/:applicationId", function(req,res){
               }
             })
           });
-          let payload = JSON.parse(JSON.stringify(user.applications[selectedApplicationIndex]));
+          let payload = {};
+          if(application.type == 'plugin'){
+            payload = JSON.parse(JSON.stringify(user.applications[requestingApplicationIndex]));
+            payload.application_id = application._id;
+          }
+          else {
+            payload = JSON.parse(JSON.stringify(user.applications[applicationIndex]))
+          }
           payload.id = user.id;
           payload.accessible_applications = userApplicationList;
           let token = jwt.sign(payload, application.secret, {
@@ -254,6 +273,7 @@ app.post("/login", function(req, res) {
             }
             user.applications.forEach(function(userApplication){
               if(applicationRecord._id == userApplication.application_id){
+
                 let userAppObject = {
                   name: applicationRecord.application,
                   application_id: applicationRecord._id,

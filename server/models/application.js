@@ -10,6 +10,7 @@ module.exports = mongoose.model('Application', new Schema({
   reset_password_redirect: String,
   audience: String,
   secret: String,
+  type: String,
   is_active: {type: Boolean, default: true},
   date_created: {type: Date, default: Date.now()},
   date_update: {type: Date, default: Date.now()}
