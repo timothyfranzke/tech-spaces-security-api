@@ -26,12 +26,12 @@ var SpacesToken = require('./server/models/token');
 var PasswordReset = require('./server/models/passwordReset');
 var auth          = require('./server/services/auth/auth.service');
 
-var jwtOptions = {};
+let jwtOptions = {};
 jwtOptions.jwtFromRequest = ExtractJwt.fromAuthHeader();
 jwtOptions.secretOrKey = 'tasmanianDevil';
 
-var roles = ['sys-admin', 'admin', 'faculty', 'user', 'viewer'];
-var port = 3009; // used to create, sign, and verify tokens
+let roles = ['sys-admin', 'admin', 'faculty', 'user', 'viewer'];
+let port = 3009; // used to create, sign, and verify tokens
 mongoose.connect(config.database); // connect to database
 app.set('superSecret', config.secret); // secret variable
 
@@ -48,7 +48,7 @@ app.use(function (req, res, next) {
   next();
 });
 
-var validateJwt = expressJwt({
+let validateJwt = expressJwt({
   secret: jwtOptions.secretOrKey
 });
 
@@ -451,9 +451,9 @@ app.post('/register', function(req, res){
 });
 
 app.post('/register-email', function(req, res){
-  var salt = bcrypt.genSaltSync();
-  var password = bcrypt.hashSync(req.body.password, salt);
-  var user = new User();
+  let salt = bcrypt.genSaltSync();
+  let password = bcrypt.hashSync(req.body.password, salt);
+  let user = new User();
 
   user.email = req.body.email;
   user.password = password;
@@ -463,7 +463,7 @@ app.post('/register-email', function(req, res){
     if (applicationResult == null) {
       res.status(403);
     }
-    console.log(applicationResult);
+
     var validator = expressJwt({
       secret: applicationResult.secret
     });
