@@ -7,6 +7,11 @@ module.exports = {
     {'id':'59e0c23a734d1d1c37fbb760','secret':'itshardtostopatrain'},
     {'id':'59e178a8734d1d1c37fc3c52','secret':'peterpan'}
   ],
+  'applicationAuth':[{
+    'description':'k-spaces-api',
+    'id':'593e0abbf36d2806fcd56c8b',
+    'secret':'12253d7-7314-4838-b1b2-d9fa5c115968'
+  }],
   'userRoles' : {
     'FACULTY':'faculty',
     'STUDENT':'user',

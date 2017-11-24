@@ -1,11 +1,11 @@
 let expressJwt  = require('express-jwt');
 let compose     = require('composable-middleware');
 let logging     = require('../logging/logging.service');
-let config      = require('../../config/configuration');
+let config      = require('../../configuration/configuration');
 let base64      = require('base-64');
 let className   = "auth.service";
 
-export function isAuthenticated(){
+export function isAuthenticated(req, res){
   let methodName   = "isAuthenticated";
   return compose()
   // Validate jwt
@@ -88,6 +88,32 @@ export function hasRole (roleRequired) {
         res.sendStatus(403);
       }
     });
+};
+
+export function hasKey(){
+  return compose()
+    .use(function(req, res, next){
+      logging.INFO(className, hasKey.name, "checking key");
+
+      let isAuthenticated = false;
+
+      if(req.query.appKey !== undefined && req.query.appSecret !== undefined){
+
+        config.applicationAuth.forEach(function(application){
+          if(application.id === req.query.appKey && application.secret === req.query.appSecret){
+            isAuthenticated = true;
+            return next();
+          }
+        });
+
+      }
+      logging.INFO(className,hasKey.name,"isAuthenticated : " + isAuthenticated);
+      if(!isAuthenticated)
+      {
+        logging.INFO(className, hasKey.name, "sending status 403");
+        res.sendStatus(403);
+      }
+    })
 }
 
 export function generateRefreshToken() {

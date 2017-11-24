@@ -1,112 +1,94 @@
-let objectID = require('mongodb').ObjectId;
-let logging = require('../../services/logging/logging.service');
-let config = require('../../configuration/configuration');
-let className = 'entity.controller';
-let bcrypt      = require('bcrypt');
-let application = require('../../../server/models/application');
-let emailService = require('../../services/email/email.service');
-let authService = require('../../services/auth/auth.service');
-let PasswordReset = require('../../models/passwordReset');
+let objectID      = require('mongodb').ObjectId;
+let logging       = require('../../services/logging/logging.service');
+let config        = require('../../configuration/configuration');
+let bcrypt        = require('bcrypt');
+let emailService  = require('../../services/email/email.service');
+let authService   = require('../../services/auth/auth.service');
 
-export function registerEmail(req,res){
-  let db = require('../../services/db/db.service').getDb();
-  let logger = logging.Logger(className, get.name, config.log_level);
+//models
+let PasswordReset = require('../../models/passwordReset');
+let Application   = require('../../models/application');
+let User          = require('../../models/user');
+
+//constants
+const CLASS_NAME = 'register.controller';
+
+export function registerByApplication(req,res){
+  //let db = require('../../services/db/db.service').getDb();
+  let logger = logging.Logger(CLASS_NAME, registerByApplication.name, config.log_level);
 
   let salt = bcrypt.genSaltSync();
   let password = bcrypt.hashSync(req.body.password, salt);
   let user = new User();
+  let applicationId = req.params.applicationID;
 
   user.email = req.body.email;
   user.password = password;
   user.applications = [];
 
-  application.findById(req.user.application_id, function(err, applicationResult) {
-    if (applicationResult == null) {
-      res.status(403);
+  Application.findById(req.params.applicationID, function(err, applicationResult) {
+
+    if (err) {
+      logger.ERROR(err, config.exceptions.GENERAL_EXCEPTION(err));
+      res.sendStatus(422);
     }
+    else {
+      let userApplication = {};
 
-    let validator = expressJwt({
-      secret: applicationResult.secret
-    });
+      if(!!req.body.application_data){
+        logger.DEBUG("application_data from request : " + JSON.stringify(req.body.application_data));
+        userApplication = req.body.application_data;
 
-    validator(req,res,function(err, response){
-      if (err) {
-        logger.ERROR(err, config.exceptions.GENERAL_EXCEPTION(err));
-        res.sendStatus(422);
       }
-      else {
-        let application = {
-          application_id: req.body.application_id,
-          roles:[]
-        };
-        let application_data = {};
+      userApplication.roles = [];
+      userApplication.roles.push(req.body.role);
+      userApplication.application_id = applicationId.toString();
+      userApplication.type = applicationResult.type;
 
-        application.roles.push(req.body.role);
-        user.applications.push(application);
+      logger.DEBUG("application_data : " + JSON.stringify(userApplication));
+      user.applications.push(userApplication);
 
-        if(req.user.application_data){
-          application_data = Object.assign(application, req.user.application_data);
-        }
+      User.create(user, function(err, userResult){
+        let passwordReset = new PasswordReset();
+        passwordReset.resetToken = authService.generateRefreshToken();
+        passwordReset.userId = userResult._id;
 
-        User.create(user, function(err, userResult){
-          let passwordReset = new PasswordReset();
-          passwordReset.resetToken = authService.generateRefreshToken();
-          passwordReset.userId = userResult._id;
+        passwordReset.save(function(err, passwordResetResult){
+          let message = "<p>An account has been created for you. Click the link to create your password.</p><p><a href='" + applicationResult.reset_password_redirect + "/" + passwordReset.resetToken + "'>link</a></p>";
+          let subject = "Tech Spaces Account Created";
 
-          passwordReset.save(function(err, passwordResetResult){
-            let mail = "<p>An account has been created for you. Click the link to create your password.</p><p><a href='" + applicationResult.reset_password_redirect + "/" + passwordReset.resetToken + "'>link</a></p>";
-            let message = {
-              to: req.body.email,
-              subject: "Reset your password",
-              body: mail
-            };
-            let registerEmailResponse = {
-              "id": userResult._id
-            };
-            emailService.sendEmail(message, function(err, mailResponse){
-              if(err){
-                logger.ERROR(config.exceptions.GENERAL_EXCEPTION(err));
-              }
-
-              res.send(registerEmailResponse);
-            });
+          let registerEmailResponse = {
+            "id": userResult._id
+          };
+          emailService.sendEmail(req.body.email, subject, message, function(err, mailResponse){
+            if(err){
+              logger.ERROR(config.exceptions.GENERAL_EXCEPTION(err));
+            }
+            res.send(registerEmailResponse);
           });
         });
-      }
-    });
+      });
+    }
   });
 }
 
 export function register(req,res){
-  let db = require('../../services/db/db.service').getDb();
-  let logger = logging.Logger(className, get.name, config.log_level);
+  let salt = bcrypt.genSaltSync();
+  let password = bcrypt.hashSync(req.body.password, salt);
+  let user = new User();
+  user.email = req.body.email;
+  user.password = password;
 
-  let entity_id = objectID(req.params.id);
-  let entityQuery = {_id : entity_id};
-  logger.DEBUG(config.information.COLLECTION_QUERY("entity", entityQuery));
+  if(!!req.body.application_data)
+  {
+    user.application_data = req.body.application_data;
+  }
 
-  try{
-    db.collection('entity').find( entityQuery).toArray(function(err, entityResult){
-      if (err) {
-        logger.ERROR(err, config.exceptions.COLLECTION_FAILED("entity"));
-        res.sendStatus(422);
-      }
-      else {
-        {
-          logger.DEBUG(config.information.COLLECTION_SUCCEEDED_WITH_RESULT("entity", entityResult));
-
-          let entityResponse = {
-            data: entityResult
-          };
-
-          res.json(entityResponse);
-        }
-      }
+  user.save(function(err, newUser){
+    let payload = {id: newUser._id, permissions: ['admin', 'faculty']};
+    let token = jwt.sign(payload, jwtOptions.secretOrKey, {
+      expiresIn: 60 * 60 * 5
     });
-  }
-  catch(err){
-    logger.ERROR(err, config.exceptions.COLLECTION_FAILED("entity"));
-
-    res.sendStatus(422);
-  }
+    res.json({message: "ok", access_token: token, id: newUser._id});
+  });
 }

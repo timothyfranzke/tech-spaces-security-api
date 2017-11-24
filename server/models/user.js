@@ -7,7 +7,7 @@ module.exports = mongoose.model('User', new Schema({
   email: String,
   password: String,
   roles: [],
-  applications:[{application_id:String, roles:[{type:String}]}],
+  applications:[],
   application_data: {},
   first_login: {type: Boolean, default:true},
   reset_password: Boolean,

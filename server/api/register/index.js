@@ -6,8 +6,8 @@ import * as auth from '../../services/auth/auth.service';
 
 let router = new Router();
 
-router.post('/register-email', auth.hasRole('admin'), controller.registerEmail);
-router.post('/register', controller.register);
+router.post('/:applicationID', auth.hasKey(), controller.registerByApplication);
+router.post('/', controller.register);
 
 module.exports = router;
 
